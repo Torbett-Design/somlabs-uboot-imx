@@ -127,34 +127,9 @@ enum display_type {
 int board_late_init(void)
 {
     enum display_type display = dt_none;
-    struct udevice *bus;
-    struct udevice *i2c_dev = NULL;
     int ret;
 
-    bool adv_carrier_board = false;
-
-#ifdef CONFIG_ENV_IS_IN_MMC
-    board_late_mmc_env_init();
-#endif
-
-    ret = uclass_get_device_by_seq(UCLASS_I2C, 1, &bus);
-    if (ret) {
-        printf("%s: Can't find bus\n", __func__);
-        return -EINVAL;
-    }
-
-    /*
-     *  check if there is RTC @0x51 on I2C2 bus - this allows us to
-     *	  distinguish between STD and ADV carrier board
-     */
-    ret = dm_i2c_probe(bus, 0x51, 0, &i2c_dev);
-    if(ret == 0) {
-        adv_carrier_board = true;
-        env_set("cb_type", "adv");
-    } else {
-        env_set("cb_type", "std");
-    }
-
+    
     /*
      * We have 5 display options supported for 2 kinds of carrier boards:
      * - no display
@@ -169,31 +144,18 @@ int board_late_init(void)
      * For std-adv board we have to read GPIO4-20:
      *  - low state means HDMI/LVDS, another GPIO selects between them
      *  - high state means MIPI/no display mode - exact display is dected by scanning i2c bus
+     * 
+     *  Torbett Design for Aesthetic Technology: We only have one display type. It's LVDS using a
+     *  TI SN65DSI83@0x3c and touch@0x01
+     * 
+     *  This can be manually set.
+     * 
      */
-    if(adv_carrier_board && cbadv_is_hdmi_selected()) {
-        display = dt_hdmi;
-    } else if(!adv_carrier_board && (dm_i2c_probe(bus, 0x48, 0, &i2c_dev) == 0)) {
-        display = dt_hdmi;
-    }
-
-    if(display == dt_hdmi) {
-        if(cb_is_lvds_enabled(adv_carrier_board)) {
-            display = dt_lvds;
-        }
-    } else if(dm_i2c_probe(bus, 0x38, 0, &i2c_dev) == 0) {
-        display = dt_mipi7;
-        env_set("extra_args", "fbcon=rotate:1");
-    } else if(dm_i2c_probe(bus, 0x01, 0, &i2c_dev) == 0) {
-        display = dt_mipi10;
-    } else {
-        display = dt_none;
-    }
-
     const char* disp_type[] = {"", "-mipi7", "-mipi10", "-lvds", "-hdmi"};
     const char* displays[]  = {"NONE", "MIPI 7\"", "MIPI 10\"", "LVDS", "HDMI"};
 
-    env_set("cb_disp", disp_type[display]);
-    printf("Carrier board type: [%s], display: [%s]\n", (adv_carrier_board)?"ADV":"STD", displays[display]);
+    env_set("cb_disp", "LVDS");
+    printf("Carrier board type: CUSTOM, display: LVDS\n");
 
     return 0;
 }
